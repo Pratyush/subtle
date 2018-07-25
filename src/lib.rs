@@ -202,7 +202,7 @@ impl<T: ConstantTimeEq> ConstantTimeEq for [T] {
 
 /// Given the bit-width `$bit_width` and the corresponding primitive
 /// unsigned and signed types `$t_u` and `$t_i` respectively, generate
-/// an `ConstantTimeEq` implementation.
+/// a `ConstantTimeEq` implementation.
 macro_rules! generate_integer_equal {
     ($t_u:ty, $t_i:ty, $bit_width:expr) => {
         impl ConstantTimeEq for $t_u {
@@ -324,6 +324,34 @@ generate_integer_conditional_select!( u16  i16);
 generate_integer_conditional_select!( u32  i32);
 generate_integer_conditional_select!( u64  i64);
 generate_integer_conditional_select!(u128 i128);
+
+impl ConditionallySelectable for bool {
+    #[inline]
+    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+        // if choice = 0, mask = (-0) = 0000...0000
+        // if choice = 1, mask = (-1) = 1111...1111
+        let a = *a as u8;
+        let b = *b as u8;
+        
+        let mask = -(choice.unwrap_u8() as i8) as u8;
+        let result = a ^ ((mask) & (a ^ b));
+        let output;
+        #[cfg(feature="nightly")]
+        unsafe {
+            asm!("" : "=r"(output) : "0"(result));
+        }
+        #[cfg(not(feature="nightly"))]
+        unsafe { output = core::mem::transmute(result); }
+        output
+    }
+}
+
+impl ConditionallySelectable for Choice {
+    #[inline]
+    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+        u8::conditional_select(&a.0, &b.0, choice).into()
+    }
+}
 
 // Modified from `serde`'s impl of `Serialize` for tuples.
 macro_rules! generate_tuple_conditional_select {
