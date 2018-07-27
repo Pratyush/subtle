@@ -560,6 +560,21 @@ impl<T: ConditionallySwappable> ConditionallySwappable for [T] {
 ///////////////////////////////////////
 ///////////////////////////////////////
 
+impl ConditionallySelectable for () {
+    #[inline]
+    fn conditional_select(_a: &Self, _b: &Self, _choice: Choice) -> Self {
+        ()
+    }
+}
+impl ConditionallyAssignable for () {
+    #[inline]
+    fn conditional_assign(&mut self, _other: &Self, _choice: Choice) {
+    }
+}
+impl ConditionallySwappable for () {
+    #[inline]
+    fn conditional_swap(&mut self, _other: &mut Self, _choice: Choice) {}
+}
 // Modified from `serde`'s impl of `Serialize` for tuples.
 macro_rules! generate_tuple_impls {
     ($(($($n:tt $name:ident)+))+) => {
