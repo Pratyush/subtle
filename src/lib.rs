@@ -127,6 +127,15 @@ impl From<u8> for Choice {
     }
 }
 
+impl From<bool> for Choice {
+    #[inline]
+    fn from(input: bool) -> Choice {
+        // Our goal is to prevent the compiler from inferring that the value held inside the
+        // resulting `Choice` struct is really an `i1` instead of an `i8`.
+        Choice(black_box(input as u8))
+    }
+}
+
 /// An `Eq`-like trait that produces a `Choice` instead of a `bool`.
 ///
 /// # Example
