@@ -403,6 +403,13 @@ macro_rules! generate_generic_conditional_assign_swap {
 
 ///////////////////////////////////////
 
+impl ConstantTimeEq for bool {
+    #[inline]
+    fn ct_eq(&self, other: &Self) -> Choice {
+        (*self as u8).ct_eq(&(*other as u8))
+    }
+}
+
 impl ConditionallySelectable for bool {
     #[inline]
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
