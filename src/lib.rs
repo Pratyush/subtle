@@ -47,6 +47,8 @@ use core::ops::{BitAnd, BitOr, BitXor, Not};
 pub struct Choice(u8);
 
 impl Choice {
+    pub const TRUE: Self = Choice(1);
+    pub const FALSE: Self = Choice(0);
     /// Unwrap the `Choice` wrapper to reveal the underlying `u8`.
     ///
     /// # Note
@@ -108,6 +110,7 @@ fn black_box(input: u8) -> u8 {
 
     input
 }
+
 #[cfg(any(target_arch = "asmjs", target_arch = "wasm32", not(feature = "nightly")))]
 #[inline(never)]
 fn black_box(input: u8) -> u8 {
