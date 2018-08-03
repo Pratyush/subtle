@@ -391,6 +391,13 @@ generate_integer_conditional_negate!( i32);
 generate_integer_conditional_negate!( i64);
 generate_integer_conditional_negate!(i128);
 
+impl ConstantTimeEq for Choice {
+    #[inline]
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.0.ct_eq(&other.0)
+    }
+}
+
 ///////////////////////////////////////
 ///////////////////////////////////////
 
