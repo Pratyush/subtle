@@ -47,8 +47,12 @@ use core::ops::{BitAnd, BitOr, BitXor, Not};
 pub struct Choice(u8);
 
 impl Choice {
+    /// The constant `Choice(1)`.
     pub const TRUE: Self = Choice(1);
+
+    /// The constant `Choice(0)`.
     pub const FALSE: Self = Choice(0);
+
     /// Unwrap the `Choice` wrapper to reveal the underlying `u8`.
     ///
     /// # Note
@@ -260,6 +264,7 @@ pub trait ConditionallySwappable {
 //////////////////////////////// Trait Impls /////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////
 
+
 macro_rules! to_signed_int {
     (u8) => {
         i8
@@ -293,6 +298,9 @@ macro_rules! to_signed_int {
     };
 }
 
+
+
+
 /// Given the bit-width `$bit_width` and the corresponding primitive
 /// unsigned and signed types `$t_u` and `$t_i` respectively, generate
 /// a `ConstantTimeEq` implementation.
@@ -301,24 +309,13 @@ macro_rules! generate_integer_equal {
         impl ConstantTimeEq for $t_u {
             #[inline]
             fn ct_eq(&self, other: &$t_u) -> Choice {
-                // First construct x such that self == other iff all bits of x are 1
-                let mut x: $t_u = !(self ^ other);
-
-                // Now compute the and of all bits of x.
-                //
-                // e.g. for a u8, do:
-                //
-                //    x &= x >> 4;
-                //    x &= x >> 2;
-                //    x &= x >> 1;
-                //
-                let mut shift: usize = $bit_width / 2;
-                while shift >= 1 {
-                    x &= x >> shift;
-                    shift /= 2;
-                }
-
-                (x as u8).into()
+                // Faster implementation compared to the old one.
+                let l = *self;
+                let r = *other;
+                let bit_diff = l ^ r;
+                let msb_iff_zero_diff = bit_diff.wrapping_sub(1) & !bit_diff;
+                let unsigned_msb_iff_zero_diff = msb_iff_zero_diff as $t_u;
+                Choice::from((unsigned_msb_iff_zero_diff >> ($bit_width - 1)) as u8)
             }
         }
         impl ConstantTimeEq for $t_i {
@@ -371,6 +368,107 @@ macro_rules! generate_integer_conditional_negate {
     )*)
 }
 
+#[cfg(all(feature = "nightly", target_arch = "x86_64"))]
+mod x86_64_cmov_impls {
+    use super::*;
+    macro_rules! to_nearest_cmovable_int {
+        (u8) => {
+            u16
+        };
+        (u16) => {
+            u16
+        };
+        (u32) => {
+            u32
+        };
+        (u64) => {
+            u64
+        };
+        (i8) => {
+            u16
+        };
+        (i16) => {
+            u16
+        };
+        (i32) => {
+            u32
+        };
+        (i64) => {
+            u64
+        };
+    }
+
+    macro_rules! generate_cmov_integer_conditional_select_assign_swap {
+        ($($t:tt)*) => ($(
+                impl ConditionallySelectable for $t {
+                    #[inline]
+                    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+                        let flag = choice.unwrap_u8();
+                        let result: to_nearest_cmovable_int!($t);
+                        let a = (*a) as to_nearest_cmovable_int!($t);
+                        let b = (*b) as to_nearest_cmovable_int!($t);
+                        unsafe {
+                            asm!("cmp $1, $$1
+                                  cmove $2, $3
+                                  mov $0, $2"
+                                : "=r"(result)
+                                : "r"(flag), "r"(a), "r"(b) // inputs
+                                : "cc"
+                                : "intel"
+                            );
+                        }
+                        result as $t
+                    }
+                }
+
+                impl ConditionallyAssignable for $t {
+                    #[inline]
+                    fn conditional_assign(&mut self, other: &Self, choice: Choice) {
+                        let flag = choice.unwrap_u8();
+                        let mut a_copy = (*self) as to_nearest_cmovable_int!($t);
+                        let b_copy = (*other) as to_nearest_cmovable_int!($t);
+                        unsafe {
+                            asm!("cmp $0, $$0
+                                  cmove $2, $1
+                                  mov [$3], $2"
+                                :
+                                : "r"(flag), "r"(a_copy), "r"(b_copy), "r"(&mut a_copy) // inputs
+                                : "cc"
+                                : "intel"
+                            );
+                        }
+                        *self = a_copy as $t;
+                    }
+                }
+
+                impl ConditionallySwappable for $t {
+                    #[inline]
+                    fn conditional_swap(&mut self, other: &mut Self, choice: Choice) {
+                        let temp = *self;
+                        self.conditional_assign(&other, choice);
+                        other.conditional_assign(&temp, choice);
+                    }
+                }
+         )*)
+    }
+    generate_cmov_integer_conditional_select_assign_swap!(  u8   i8);
+    generate_cmov_integer_conditional_select_assign_swap!( u16  i16);
+    generate_cmov_integer_conditional_select_assign_swap!( u32  i32);
+    generate_cmov_integer_conditional_select_assign_swap!( u64  i64);
+
+}
+
+#[cfg(not(all(feature = "nightly", target_arch = "x86_64")))]
+mod non_cmov_impls {
+    use super::*;
+
+    generate_integer_conditional_select_assign_swap!(  u8   i8);
+    generate_integer_conditional_select_assign_swap!( u16  i16);
+    generate_integer_conditional_select_assign_swap!( u32  i32);
+    generate_integer_conditional_select_assign_swap!( u64  i64);
+
+}
+
 
 
 generate_integer_equal!(u8, i8, 8);
@@ -379,10 +477,7 @@ generate_integer_equal!(u32, i32, 32);
 generate_integer_equal!(u64, i64, 64);
 generate_integer_equal!(u128, i128, 128);
 
-generate_integer_conditional_select_assign_swap!(  u8   i8);
-generate_integer_conditional_select_assign_swap!( u16  i16);
-generate_integer_conditional_select_assign_swap!( u32  i32);
-generate_integer_conditional_select_assign_swap!( u64  i64);
+
 generate_integer_conditional_select_assign_swap!(u128 i128);
 
 generate_integer_conditional_negate!(  i8);
