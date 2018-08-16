@@ -1,0 +1,13 @@
+[package]
+name = "check-asm"
+version = "0.0.1"
+authors = ["Pratyush Mishra"]
+publish = false
+
+[dependencies.subtle]
+path = ".."
+features = ["nightly"]
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
