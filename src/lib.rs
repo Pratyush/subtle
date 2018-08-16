@@ -20,6 +20,7 @@
 //! [RFC 1990 stabilizes](https://github.com/rust-lang/rust/issues/44732).
 
 #[cfg(feature = "std")]
+#[macro_use]
 extern crate std;
 
 use core::ops::{BitAnd, BitOr, BitXor, Not};
@@ -371,73 +372,157 @@ macro_rules! generate_integer_conditional_negate {
 #[cfg(all(feature = "nightly", target_arch = "x86_64"))]
 mod x86_64_cmov_impls {
     use super::*;
-    macro_rules! to_nearest_cmovable_int {
-        (u8) => {
-            u16
-        };
-        (u16) => {
-            u16
-        };
-        (u32) => {
-            u32
-        };
-        (u64) => {
-            u64
-        };
-        (i8) => {
-            u16
-        };
-        (i16) => {
-            u16
-        };
-        (i32) => {
-            u32
-        };
-        (i64) => {
-            u64
-        };
+
+    impl ConditionallySelectable for u8 {
+        #[inline]
+        fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+            let a = *a as u16;
+            let b = *b as u16;
+            u16::conditional_select(&a, &b, choice) as u8
+        }
+    }
+
+    impl ConditionallySelectable for u16 {
+        #[inline]
+        fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+            let flag = choice.unwrap_u8();
+            let temp_a: u16;
+            let temp_b: u16;
+            unsafe {
+                asm!("
+                      mov $0, [$2]
+                      mov $1, [$3]"
+                    : "=&r"(temp_a), "=&r"(temp_b)
+                    : "r"(a), "r"(b) // inputs
+                    : "cc"
+                    : "intel"
+                );
+            }
+
+            let result: u16;
+            unsafe {
+                asm!("
+                      cmp $1, $$1
+                      cmove $2, $3
+                      mov $0, $2"
+                    : "=&r"(result)
+                    : "r"(flag), "r"(temp_a), "r"(temp_b) // inputs
+                    : "cc"
+                    : "intel"
+                );
+            }
+            result
+        }
+    }
+
+    impl ConditionallySelectable for u32 {
+        #[inline]
+        fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+            let flag = choice.unwrap_u8();
+            let temp_a: u32;
+            let temp_b: u32;
+            unsafe {
+                asm!("
+                      mov $0, [$2]
+                      mov $1, [$3]"
+                    : "=&r"(temp_a), "=&r"(temp_b)
+                    : "r"(a), "r"(b) // inputs
+                    : "cc"
+                    : "intel"
+                );
+            }
+
+            let result: u32;
+            unsafe {
+                asm!("
+                      cmp $1, $$1
+                      cmove $2, $3
+                      mov $0, $2"
+                    : "=&r"(result)
+                    : "r"(flag), "r"(temp_a), "r"(temp_b) // inputs
+                    : "cc"
+                    : "intel"
+                );
+            }
+            result
+        }
+    }
+
+    impl ConditionallySelectable for u64 {
+        #[inline]
+        fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+            let flag = choice.unwrap_u8();
+            let temp_a: u64;
+            let temp_b: u64;
+            unsafe {
+                asm!("
+                      mov $0, [$2]
+                      mov $1, [$3]"
+                    : "=&r"(temp_a), "=&r"(temp_b)
+                    : "r"(a), "r"(b) // inputs
+                    : "cc"
+                    : "intel"
+                );
+            }
+
+            let result: u64;
+            unsafe {
+                asm!("
+                      cmp $1, $$1
+                      cmove $2, $3
+                      mov $0, $2"
+                    : "=&r"(result)
+                    : "r"(flag), "r"(temp_a), "r"(temp_b) // inputs
+                    : "cc"
+                    : "intel"
+                );
+            }
+            result
+        }
+    }
+
+    impl ConditionallySelectable for i8 {
+        #[inline]
+        fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+            let a = *a as i16;
+            let b = *b as i16;
+            i16::conditional_select(&a, &b, choice) as Self 
+        }
+    }
+
+    impl ConditionallySelectable for i16 {
+        #[inline]
+        fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+            let a = *a as u16;
+            let b = *b as u16;
+            u16::conditional_select(&a, &b, choice) as Self
+        }
+    }
+
+    impl ConditionallySelectable for i32 {
+        #[inline]
+        fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+            let a = *a as u32;
+            let b = *b as u32;
+            u32::conditional_select(&a, &b, choice) as Self
+        }
+    }
+
+    impl ConditionallySelectable for i64 {
+        #[inline]
+        fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+            let a = *a as u64;
+            let b = *b as u64;
+            u64::conditional_select(&a, &b, choice) as Self
+        }
     }
 
     macro_rules! generate_cmov_integer_conditional_select_assign_swap {
         ($($t:tt)*) => ($(
-                impl ConditionallySelectable for $t {
-                    #[inline]
-                    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-                        let flag = choice.unwrap_u8();
-                        let result: to_nearest_cmovable_int!($t);
-                        let a = (*a) as to_nearest_cmovable_int!($t);
-                        let b = (*b) as to_nearest_cmovable_int!($t);
-                        unsafe {
-                            asm!("cmp $1, $$1
-                                  cmove $2, $3
-                                  mov $0, $2"
-                                : "=r"(result)
-                                : "r"(flag), "r"(a), "r"(b) // inputs
-                                : "cc"
-                                : "intel"
-                            );
-                        }
-                        result as $t
-                    }
-                }
-
                 impl ConditionallyAssignable for $t {
                     #[inline]
                     fn conditional_assign(&mut self, other: &Self, choice: Choice) {
-                        let flag = choice.unwrap_u8();
-                        let mut a_copy = (*self) as to_nearest_cmovable_int!($t);
-                        let b_copy = (*other) as to_nearest_cmovable_int!($t);
-                        unsafe {
-                            asm!("cmp $1, $$1
-                                  cmove $2, $3
-                                  mov $0, $2"
-                                : "=r"(result)
-                                : "r"(flag), "r"(a), "r"(b) // inputs
-                                : "cc"
-                                : "intel"
-                            );
-                        }
-                        *self = result as $t;
+                        *self = Self::conditional_select(self as &Self, other, choice)
                     }
                 }
 
@@ -445,8 +530,15 @@ mod x86_64_cmov_impls {
                     #[inline]
                     fn conditional_swap(&mut self, other: &mut Self, choice: Choice) {
                         let temp = *self;
-                        self.conditional_assign(&other, choice);
+                        self.conditional_assign(other, choice);
+                        // #[cfg(feature = "std")]
+                        // println!("Self: {:?}", self);
+
+                        // println!("Other before swap: {:?}", other);
+                        // println!("Temp before swap: {:?}", temp);
                         other.conditional_assign(&temp, choice);
+                        // #[cfg(feature = "std")]
+                        // println!("Other: {:?}", other);
                     }
                 }
          )*)
@@ -776,6 +868,35 @@ generate_tuple_impls! {
     (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11)
 }
 
+#[allow(missing_docs)]
+#[cfg(all(feature = "nightly", target_arch = "x86_64"))]
+pub mod check_asm {
+    use super::*;
+    macro_rules! concrete_funcs {
+    ($t:tt, $name:ident) => {
+            pub fn $name(a: &$t, b: &$t, choice: Choice) -> $t {
+                $t::conditional_select(a, b, choice)
+            }
+        }
+    }
+    concrete_funcs!(i8, csel_i8);
+    concrete_funcs!(u32, csel_u32);
+    concrete_funcs!(i32, csel_i32);
+    concrete_funcs!(u64, csel_u64);
+    concrete_funcs!(i64, csel_i64);
+
+    pub fn test_i64() {
+        let x: i64 = 11234532463;
+        let y: i64 = -4123451243;
+
+        let result = csel_i64(&x, &y, 0.into());
+        assert_eq!(result, x);
+
+        let result = csel_i64(&x, &y, 1.into());
+        assert_eq!(result, y);
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -931,13 +1052,13 @@ mod test {
 
     #[test]
     fn conditional_assign_i32() {
-        let mut a: i32 = 5;
-        let b: i32 = 13;
+        let mut a: i32 = 599124;
+        let b: i32 = 1312312;
 
         a.conditional_assign(&b, 0.into());
-        assert_eq!(a, 5);
+        assert_eq!(a, 599124);
         a.conditional_assign(&b, 1.into());
-        assert_eq!(a, 13);
+        assert_eq!(a, 1312312);
     }
 
     #[test]
@@ -956,7 +1077,7 @@ mod test {
             let x: $t = 0;  // all 0 bits
             let y: $t = !0; // all 1 bits
 
-            assert_eq!(<$t>::conditional_select(&x, &y, 0.into()), 0);
+            assert_eq!(<$t>::conditional_select(&x, &y, 0.into()), 0, "Failed for type: {:?}", stringify!($t));
             assert_eq!(<$t>::conditional_select(&x, &y, 1.into()), y);
         )*)
     }
@@ -1010,13 +1131,15 @@ mod test {
     #[test]
     fn custom_conditional_swap_i64() {
         let mut x: i64 = 11234532463;
-        let mut y: i64 = 412345124352;
+        let mut y: i64 = -4123451243;
 
+        println!("NO-OP Swap: ");
         x.conditional_swap(&mut y, 0.into());
         assert_eq!(x, 11234532463);
-        assert_eq!(y, 412345124352);
+        assert_eq!(y, -4123451243);
+        println!("Effectful Swap: ");
         x.conditional_swap(&mut y, 1.into());
-        assert_eq!(x, 412345124352);
+        assert_eq!(x, -4123451243);
         assert_eq!(y, 11234532463);
     }
 
