@@ -428,16 +428,16 @@ mod x86_64_cmov_impls {
                         let mut a_copy = (*self) as to_nearest_cmovable_int!($t);
                         let b_copy = (*other) as to_nearest_cmovable_int!($t);
                         unsafe {
-                            asm!("cmp $0, $$1
-                                  cmove $2, $1
-                                  mov [$3], $2"
-                                :
-                                : "r"(flag), "r"(a_copy), "r"(b_copy), "r"(&mut a_copy) // inputs
+                            asm!("cmp $1, $$1
+                                  cmove $2, $3
+                                  mov $0, $2"
+                                : "=r"(result)
+                                : "r"(flag), "r"(a), "r"(b) // inputs
                                 : "cc"
                                 : "intel"
                             );
                         }
-                        *self = a_copy as $t;
+                        *self = result as $t;
                     }
                 }
 
