@@ -396,11 +396,12 @@ mod x86_64_cmov_impls {
                 impl ConditionallySelectable for $t {
                     #[inline]
                     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-                        let temp_a: Self;
-                        let temp_b: Self;
-                        unsafe {
-                            asm!("mov $0, [$1]" : "=&ir"(temp_a) : "ir"(a) : : "intel");
-                            asm!("mov $0, [$1]" : "=&ir"(temp_b) : "ir"(b) : : "intel");
+                        let temp_a = *a;
+                        let temp_b = *b;
+                        // Forces compiler to not optimize the if into something weird
+                        unsafe { 
+                            asm!("" :: "r"(temp_a) :: "volatile");
+                            asm!("" :: "r"(temp_b) :: "volatile");
                         }
                         // TODO: how to verify that this compiles to cmov?
                         if choice.unwrap_u8() == 1 { temp_b } else { temp_a }
@@ -756,6 +757,36 @@ generate_tuple_impls! {
     (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9)
     (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10)
     (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11)
+}
+
+#[allow(missing_docs)]
+#[cfg(all(feature = "nightly", target_arch = "x86_64"))]
+pub mod check_asm {
+    use super::*;
+    macro_rules! concrete_funcs {
+    ($t:tt, $name:ident) => {
+            pub fn $name(a: &$t, b: &$t, choice: Choice) -> $t {
+                $t::conditional_select(a, b, choice)
+            }
+        }
+    }
+    concrete_funcs!(i8, csel_i8);
+    concrete_funcs!(i32, csel_i16);
+    concrete_funcs!(u32, csel_u32);
+    concrete_funcs!(i32, csel_i32);
+    concrete_funcs!(u64, csel_u64);
+    concrete_funcs!(i64, csel_i64);
+
+    pub fn test_i64() {
+        let x: i64 = 11234532463;
+        let y: i64 = -4123451243;
+
+        let result = csel_i64(&x, &y, 0.into());
+        assert_eq!(result, x);
+
+        let result = csel_i64(&x, &y, 1.into());
+        assert_eq!(result, y);
+    }
 }
 
 #[cfg(test)]
