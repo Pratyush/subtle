@@ -428,7 +428,7 @@ mod x86_64_cmov_impls {
                         let mut a_copy = (*self) as to_nearest_cmovable_int!($t);
                         let b_copy = (*other) as to_nearest_cmovable_int!($t);
                         unsafe {
-                            asm!("cmp $0, $$0
+                            asm!("cmp $1, $$0
                                   cmove $2, $1
                                   mov [$3], $2"
                                 :
@@ -787,6 +787,129 @@ mod test {
         let b: [u8; 4] = [0, 0, 0, 0];
 
         assert_eq!((&a).ct_eq(&b).unwrap_u8(), 1);
+    }
+
+    #[test]
+    fn conditional_select_i8() {
+        for i in ::std::i8::MIN..=::std::i8::MAX {
+            for j in ::std::i8::MIN..=::std::i8::MAX {
+                assert_eq!(i, i8::conditional_select(&i, &j, 0.into()));
+                assert_eq!(j, i8::conditional_select(&i, &j, 1.into()));
+            }
+        }
+    }
+
+    #[test]
+    fn conditional_swap_i8() {
+        for i in ::std::i8::MIN..=::std::i8::MAX {
+            for j in ::std::i8::MIN..=::std::i8::MAX {
+                let mut i_copy = i;
+                let mut j_copy = j;
+
+                i_copy.conditional_swap(&mut j_copy, 0.into());
+                assert_eq!((i, j), (i_copy, j_copy));
+
+                i_copy.conditional_swap(&mut j_copy, 1.into());
+                assert_eq!((i, j), (j_copy, i_copy));
+            }
+        }
+    }
+
+    #[test]
+    fn conditional_assign_i8() {
+        for i in ::std::i8::MIN..=::std::i8::MAX {
+            for j in ::std::i8::MIN..=::std::i8::MAX {
+                let mut i_copy = i;
+
+                i_copy.conditional_assign(&j, 0.into());
+                assert_eq!(i_copy, i);
+
+                i_copy.conditional_assign(&j, 1.into());
+                assert_eq!(i_copy, j);
+            }
+        }
+    }
+
+    #[test]
+    fn conditional_select_u8() {
+        for i in 0..=::std::u8::MAX {
+            for j in 0..=::std::u8::MAX {
+                assert_eq!(i, u8::conditional_select(&i, &j, 0.into()));
+                assert_eq!(j, u8::conditional_select(&i, &j, 1.into()));
+            }
+        }
+    }
+
+    #[test]
+    fn conditional_swap_u8() {
+        for i in 0..=::std::u8::MAX {
+            for j in 0..=::std::u8::MAX {
+                let mut i_copy = i;
+                let mut j_copy = j;
+
+                i_copy.conditional_swap(&mut j_copy, 0.into());
+                assert_eq!((i, j), (i_copy, j_copy));
+
+                i_copy.conditional_swap(&mut j_copy, 1.into());
+                assert_eq!((i, j), (j_copy, i_copy));
+            }
+        }
+    }
+
+    #[test]
+    fn conditional_assign_u8() {
+        for i in 0..=::std::u8::MAX {
+            for j in 0..=::std::u8::MAX {
+                let mut i_copy = i;
+
+                i_copy.conditional_assign(&j, 0.into());
+                assert_eq!(i_copy, i);
+
+                i_copy.conditional_assign(&j, 1.into());
+                assert_eq!(i_copy, j);
+            }
+        }
+    }
+
+    #[test]
+    fn conditional_select_u16() {
+        for i in 0..=::std::u16::MAX {
+            for j in 0..=::std::u16::MAX {
+                assert_eq!(i, u16::conditional_select(&i, &j, 0.into()));
+                assert_eq!(j, u16::conditional_select(&i, &j, 1.into()));
+            }
+        }
+    }
+
+    #[test]
+    fn conditional_swap_u16() {
+        for i in 0..=::std::u16::MAX {
+            for j in 0..=::std::u16::MAX {
+                let mut i_copy = i;
+                let mut j_copy = j;
+
+                i_copy.conditional_swap(&mut j_copy, 0.into());
+                assert_eq!((i, j), (i_copy, j_copy));
+
+                i_copy.conditional_swap(&mut j_copy, 1.into());
+                assert_eq!((i, j), (j_copy, i_copy));
+            }
+        }
+    }
+
+    #[test]
+    fn conditional_assign_u16() {
+        for i in 0..=::std::u16::MAX {
+            for j in 0..=::std::u16::MAX {
+                let mut i_copy = i;
+
+                i_copy.conditional_assign(&j, 0.into());
+                assert_eq!(i_copy, i);
+
+                i_copy.conditional_assign(&j, 1.into());
+                assert_eq!(i_copy, j);
+            }
+        }
     }
 
     #[test]
