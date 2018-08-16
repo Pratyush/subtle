@@ -758,36 +758,6 @@ generate_tuple_impls! {
     (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11)
 }
 
-#[allow(missing_docs)]
-#[cfg(all(feature = "nightly", target_arch = "x86_64"))]
-pub mod check_asm {
-    use super::*;
-    macro_rules! concrete_funcs {
-    ($t:tt, $name:ident) => {
-            pub fn $name(a: &$t, b: &$t, choice: Choice) -> $t {
-                $t::conditional_select(a, b, choice)
-            }
-        }
-    }
-    concrete_funcs!(i8, csel_i8);
-    concrete_funcs!(i32, csel_i16);
-    concrete_funcs!(u32, csel_u32);
-    concrete_funcs!(i32, csel_i32);
-    concrete_funcs!(u64, csel_u64);
-    concrete_funcs!(i64, csel_i64);
-
-    pub fn test_i64() {
-        let x: i64 = 11234532463;
-        let y: i64 = -4123451243;
-
-        let result = csel_i64(&x, &y, 0.into());
-        assert_eq!(result, x);
-
-        let result = csel_i64(&x, &y, 1.into());
-        assert_eq!(result, y);
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
