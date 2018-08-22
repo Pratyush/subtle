@@ -11,6 +11,7 @@
 
 #![no_std]
 #![cfg_attr(feature = "nightly", feature(asm))]
+#![cfg_attr(feature = "nightly", feature(specialization))]
 #![cfg_attr(feature = "nightly", feature(external_doc))]
 #![cfg_attr(feature = "nightly", doc(include = "../README.md"))]
 #![cfg_attr(feature = "nightly", deny(missing_docs))]
@@ -585,6 +586,7 @@ impl<T: ConstantTimeEq> ConstantTimeEq for  [T] {
     }
 }
 
+#[cfg(not(feature = "nightly"))]
 impl<T: ConditionallyAssignable> ConditionallyAssignable for [T] {
     /// Conditionally assign the contents of `other` to `self` if `choice == 1`;
     /// otherwise, reassign the contents of `self` to `self`.
@@ -622,6 +624,7 @@ impl<T: ConditionallyAssignable> ConditionallyAssignable for [T] {
     }
 }
 
+#[cfg(not(feature = "nightly"))]
 impl<T: ConditionallySwappable> ConditionallySwappable for [T] {
     /// Conditionally swap the contents of `self` and `other` if `choice == 1`;
     /// otherwise, reassign both unto themselves.
@@ -659,6 +662,204 @@ impl<T: ConditionallySwappable> ConditionallySwappable for [T] {
             T::conditional_swap(a, b, choice);
         }
     }
+}
+
+#[cfg(feature = "nightly")]
+impl<T: ConditionallyAssignable> ConditionallyAssignable for [T] {
+    /// Conditionally assign the contents of `other` to `self` if `choice == 1`;
+    /// otherwise, reassign the contents of `self` to `self`.
+    ///
+    /// # Note
+    ///
+    /// In `debug` mode, this function panics if the lengths of the input slices
+    /// are different. In `release` mode, it conditionally assigns the contents of
+    /// the shorter slice to the equivalent locations in the longer slice.
+    /// It does this in time independent of the slice contents.
+    ///
+    /// Since arrays coerce to slices, this function works with fixed-size arrays:
+    ///
+    /// ```
+    /// # extern crate subtle;
+    /// use subtle::ConditionallyAssignable;
+    /// #
+    /// # fn main() {
+    ///
+    /// let mut a: [u8; 8] = [0,1,2,3,4,5,6,7];
+    /// let b: [u8; 8] = [0,1,2,3,0,1,2,3];
+    ///
+    /// a.conditional_assign(&b, 0.into());
+    /// assert_eq!(a, [0,1,2,3,4,5,6,7]);
+    /// a.conditional_assign(&b, 1.into());
+    /// assert_eq!(a, b);
+    /// # }
+    /// ```
+    #[inline]
+    default fn conditional_assign(&mut self, other: &Self, choice: Choice) {
+        debug_assert_eq!(self.len(), other.len());
+        for (a, b) in self.iter_mut().zip(other.iter()) {
+            a.conditional_assign(b, choice);
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl<T: ConditionallySwappable> ConditionallySwappable for [T] {
+    /// Conditionally swap the contents of `self` and `other` if `choice == 1`;
+    /// otherwise, reassign both unto themselves.
+    ///
+    /// # Note
+    ///
+    /// In `debug` mode, this function panics if the lengths of the input slices
+    /// are different. In `release` mode, it conditionally swaps the contents of
+    /// the shorter slice into the equivalent locations in the longer slice.
+    /// It does this in time independent of the slice contents.
+    ///
+    /// Since arrays coerce to slices, this function works with fixed-size arrays:
+    ///
+    /// ```
+    /// # extern crate subtle;
+    /// use subtle::ConditionallySwappable;
+    /// #
+    /// # fn main() {
+    /// let mut a: [u8; 8] = [0,1,2,3,4,5,6,7];
+    /// let mut b: [u8; 8] = [0,1,2,3,0,1,2,3];
+    ///
+    /// a.conditional_swap(&mut b, 0.into());
+    /// assert_eq!(a, [0,1,2,3,4,5,6,7]);
+    /// assert_eq!(b, [0,1,2,3,0,1,2,3]);
+    ///
+    /// a.conditional_swap(&mut b, 1.into());
+    /// assert_eq!(a, [0,1,2,3,0,1,2,3]);
+    /// assert_eq!(b, [0,1,2,3,4,5,6,7]);
+    /// # }
+    /// ```
+    #[inline]
+    default fn conditional_swap(&mut self, other: &mut Self, choice: Choice) {
+        debug_assert_eq!(self.len(), other.len());
+        for (a, b) in self.iter_mut().zip(other.iter_mut()) {
+            T::conditional_swap(a, b, choice);
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl ConditionallyAssignable for [u8] {
+    /// Conditionally assign the contents of `other` to `self` if `choice == 1`;
+    /// otherwise, reassign the contents of `self` to `self`.
+    ///
+    /// # Note
+    ///
+    /// In `debug` mode, this function panics if the lengths of the input slices
+    /// are different. In `release` mode, it conditionally assigns the contents of
+    /// the shorter slice to the equivalent locations in the longer slice.
+    /// It does this in time independent of the slice contents.
+    ///
+    /// Since arrays coerce to slices, this function works with fixed-size arrays:
+    ///
+    /// ```
+    /// # extern crate subtle;
+    /// use subtle::ConditionallyAssignable;
+    /// #
+    /// # fn main() {
+    ///
+    /// let mut a: [u8; 8] = [0,1,2,3,4,5,6,7];
+    /// let b: [u8; 8] = [0,1,2,3,0,1,2,3];
+    ///
+    /// a.conditional_assign(&b, 0.into());
+    /// assert_eq!(a, [0,1,2,3,4,5,6,7]);
+    /// a.conditional_assign(&b, 1.into());
+    /// assert_eq!(a, b);
+    /// # }
+    /// ```
+    #[inline]
+    fn conditional_assign(&mut self, other: &Self, choice: Choice) {
+        assert_eq!(self.len(), other.len());
+        let part_of_length_divisible_by_8 = (self.len() / 8) * 8;
+        let (self_long, self_short) = self.split_at_mut(part_of_length_divisible_by_8);
+        let (other_long, other_short) = other.split_at(part_of_length_divisible_by_8);
+        let self_long = to_u64_slice_mut(self_long);
+        let other_long = to_u64_slice(other_long);
+        for (a, b) in self_long.iter_mut().zip(other_long.iter()) {
+            a.conditional_assign(b, choice);
+        }
+        for (a, b) in self_short.iter_mut().zip(other_short.iter()) {
+            a.conditional_assign(b, choice);
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+impl ConditionallySwappable for [u8] {
+    /// Conditionally swap the contents of `self` and `other` if `choice == 1`;
+    /// otherwise, reassign both unto themselves.
+    ///
+    /// # Note
+    ///
+    /// In `debug` mode, this function panics if the lengths of the input slices
+    /// are different. In `release` mode, it conditionally swaps the contents of
+    /// the shorter slice into the equivalent locations in the longer slice.
+    /// It does this in time independent of the slice contents.
+    ///
+    /// Since arrays coerce to slices, this function works with fixed-size arrays:
+    ///
+    /// ```
+    /// # extern crate subtle;
+    /// use subtle::ConditionallySwappable;
+    /// #
+    /// # fn main() {
+    /// let mut a: [u8; 8] = [0,1,2,3,4,5,6,7];
+    /// let mut b: [u8; 8] = [0,1,2,3,0,1,2,3];
+    ///
+    /// a.conditional_swap(&mut b, 0.into());
+    /// assert_eq!(a, [0,1,2,3,4,5,6,7]);
+    /// assert_eq!(b, [0,1,2,3,0,1,2,3]);
+    ///
+    /// a.conditional_swap(&mut b, 1.into());
+    /// assert_eq!(a, [0,1,2,3,0,1,2,3]);
+    /// assert_eq!(b, [0,1,2,3,4,5,6,7]);
+    /// # }
+    /// ```
+    #[inline]
+    fn conditional_swap(&mut self, other: &mut Self, choice: Choice) {
+        assert_eq!(self.len(), other.len());
+        let part_of_length_divisible_by_8 = (self.len() / 8) * 8;
+        let (self_long, self_short) = self.split_at_mut(part_of_length_divisible_by_8);
+        let (other_long, other_short) = other.split_at_mut(part_of_length_divisible_by_8);
+        let self_long = to_u64_slice_mut(self_long);
+        let other_long = to_u64_slice_mut(other_long);
+
+        for (a, b) in self_long.iter_mut().zip(other_long.iter_mut()) {
+            u64::conditional_swap(a, b, choice);
+        }
+        for (a, b) in self_short.iter_mut().zip(other_short.iter_mut()) {
+            u8::conditional_swap(a, b, choice);
+        }
+    }
+}
+
+#[cfg(feature = "nightly")]
+#[inline(always)]
+fn to_u64_slice(bytes: &[u8]) -> &[u64] {
+    assert_eq!(bytes.len() % 8, 0);
+    unsafe {
+        core::slice::from_raw_parts(
+            bytes.as_ptr() as *const u64,
+            bytes.len() / std::mem::size_of::<u64>(),
+        )
+    }
+}
+
+#[cfg(feature = "nightly")]
+#[inline(always)]
+fn to_u64_slice_mut(bytes: &mut [u8]) -> &mut [u64] {
+    assert_eq!(bytes.len() % 8, 0);
+    unsafe {
+        core::slice::from_raw_parts_mut(
+            bytes.as_ptr() as *mut u64,
+            bytes.len() / std::mem::size_of::<u64>(),
+        )
+    }
+
 }
 
 ///////////////////////////////////////
