@@ -400,7 +400,7 @@ mod x86_64_cmov_impls {
                         let temp_a = *a;
                         let temp_b = *b;
                         // Forces compiler to not optimize the if into something weird
-                        unsafe { 
+                        unsafe {
                             asm!("" :: "r"(temp_a) :: "volatile");
                             asm!("" :: "r"(temp_b) :: "volatile");
                         }
@@ -515,7 +515,7 @@ impl ConditionallySelectable for bool {
         // if choice = 1, mask = (-1) = 1111...1111
         let a = *a as u8;
         let b = *b as u8;
-        
+
         let mask = -(choice.unwrap_u8() as i8) as u8;
         let result = a ^ ((mask) & (a ^ b));
         let output;
@@ -541,6 +541,7 @@ generate_generic_conditional_assign_swap!(Choice);
 ///////////////////////////////////////
 ///////////////////////////////////////
 
+#[cfg(not(feature = "nightly"))]
 impl<T: ConstantTimeEq> ConstantTimeEq for  [T] {
     /// Check whether two slices of `ConstantTimeEq` types are equal.
     ///
@@ -665,6 +666,52 @@ impl<T: ConditionallySwappable> ConditionallySwappable for [T] {
 }
 
 #[cfg(feature = "nightly")]
+impl<T: ConstantTimeEq> ConstantTimeEq for  [T] {
+    /// Check whether two slices of `ConstantTimeEq` types are equal.
+    ///
+    /// # Note
+    ///
+    /// This function short-circuits if the lengths of the input slices
+    /// are different.  Otherwise, it should execute in time independent
+    /// of the slice contents.
+    ///
+    /// Since arrays coerce to slices, this function works with fixed-size arrays:
+    ///
+    /// ```
+    /// # use subtle::ConstantTimeEq;
+    /// #
+    /// let a: [u8; 8] = [0,1,2,3,4,5,6,7];
+    /// let b: [u8; 8] = [0,1,2,3,0,1,2,3];
+    ///
+    /// let a_eq_a = a.ct_eq(&a);
+    /// let a_eq_b = a.ct_eq(&b);
+    ///
+    /// assert_eq!(a_eq_a.unwrap_u8(), 1);
+    /// assert_eq!(a_eq_b.unwrap_u8(), 0);
+    /// ```
+    #[inline]
+    default fn ct_eq(&self, rhs: &[T]) -> Choice {
+        let len = self.len();
+
+        // Short-circuit on the *lengths* of the slices, not their
+        // contents.
+        if len != rhs.len() {
+            return Choice::from(0);
+        }
+
+        // This loop shouldn't be shortcircuitable, since the compiler
+        // shouldn't be able to reason about the value of the `u8`
+        // unwrapped from the `ct_eq` result.
+        let mut x = 1u8;
+        for (ai, bi) in self.iter().zip(rhs.iter()) {
+            x &= ai.ct_eq(bi).unwrap_u8();
+        }
+
+        x.into()
+    }
+}
+
+#[cfg(feature = "nightly")]
 impl<T: ConditionallyAssignable> ConditionallyAssignable for [T] {
     /// Conditionally assign the contents of `other` to `self` if `choice == 1`;
     /// otherwise, reassign the contents of `self` to `self`.
@@ -743,6 +790,60 @@ impl<T: ConditionallySwappable> ConditionallySwappable for [T] {
 }
 
 #[cfg(feature = "nightly")]
+impl ConstantTimeEq for  [u8] {
+    /// Check whether two slices of `ConstantTimeEq` types are equal.
+    ///
+    /// # Note
+    ///
+    /// This function short-circuits if the lengths of the input slices
+    /// are different.  Otherwise, it should execute in time independent
+    /// of the slice contents.
+    ///
+    /// Since arrays coerce to slices, this function works with fixed-size arrays:
+    ///
+    /// ```
+    /// # use subtle::ConstantTimeEq;
+    /// #
+    /// let a: [u8; 8] = [0,1,2,3,4,5,6,7];
+    /// let b: [u8; 8] = [0,1,2,3,0,1,2,3];
+    ///
+    /// let a_eq_a = a.ct_eq(&a);
+    /// let a_eq_b = a.ct_eq(&b);
+    ///
+    /// assert_eq!(a_eq_a.unwrap_u8(), 1);
+    /// assert_eq!(a_eq_b.unwrap_u8(), 0);
+    /// ```
+    #[inline]
+    fn ct_eq(&self, rhs: &[u8]) -> Choice {
+        let len = self.len();
+
+        // Short-circuit on the *lengths* of the slices, not their
+        // contents.
+        if len != rhs.len() {
+            return Choice::from(0);
+        }
+
+        // This loop shouldn't be shortcircuitable, since the compiler
+        // shouldn't be able to reason about the value of the `u8`
+        // unwrapped from the `ct_eq` result.
+        let mut x = 1u8;
+
+        let part_of_self_not_aligned_to_8 = self.len() % 8;
+        let (self_short, self_long) = self.split_at(part_of_self_not_aligned_to_8);
+        let (other_short, other_long) = rhs.split_at(part_of_self_not_aligned_to_8);
+
+        for (ai, bi) in self_short.iter().zip(other_short.iter()) {
+            x &= ai.ct_eq(bi).unwrap_u8();
+        }
+        for (ai, bi) in self_long.iter().zip(other_long.iter()) {
+            x &= ai.ct_eq(bi).unwrap_u8();
+        }
+
+        x.into()
+    }
+}
+
+#[cfg(feature = "nightly")]
 impl ConditionallyAssignable for [u8] {
     /// Conditionally assign the contents of `other` to `self` if `choice == 1`;
     /// otherwise, reassign the contents of `self` to `self`.
@@ -773,10 +874,11 @@ impl ConditionallyAssignable for [u8] {
     /// ```
     #[inline]
     fn conditional_assign(&mut self, other: &Self, choice: Choice) {
-        assert_eq!(self.len(), other.len());
-        let part_of_length_divisible_by_8 = (self.len() / 8) * 8;
-        let (self_long, self_short) = self.split_at_mut(part_of_length_divisible_by_8);
-        let (other_long, other_short) = other.split_at(part_of_length_divisible_by_8);
+        debug_assert_eq!(self.len(), other.len());
+        let part_of_self_not_aligned_to_8 = self.len() % 8;
+        let part_of_other_not_aligned_to_8 = other.len() % 8;
+        let (self_short, self_long) = self.split_at_mut(part_of_self_not_aligned_to_8);
+        let (other_short, other_long) = other.split_at(part_of_other_not_aligned_to_8);
         let self_long = to_u64_slice_mut(self_long);
         let other_long = to_u64_slice(other_long);
         for (a, b) in self_long.iter_mut().zip(other_long.iter()) {
@@ -821,18 +923,21 @@ impl ConditionallySwappable for [u8] {
     /// ```
     #[inline]
     fn conditional_swap(&mut self, other: &mut Self, choice: Choice) {
-        assert_eq!(self.len(), other.len());
-        let part_of_length_divisible_by_8 = (self.len() / 8) * 8;
-        let (self_long, self_short) = self.split_at_mut(part_of_length_divisible_by_8);
-        let (other_long, other_short) = other.split_at_mut(part_of_length_divisible_by_8);
+        debug_assert_eq!(self.len(), other.len());
+        // We want to ensure that we only split at aligned pointers.
+        let part_of_self_not_aligned_to_8 = self.len() % 8;
+        let part_of_other_not_aligned_to_8 = other.len() % 8;
+
+        let (self_short, self_long) = self.split_at_mut(part_of_self_not_aligned_to_8);
+        let (other_short, other_long) = other.split_at_mut(part_of_other_not_aligned_to_8);
         let self_long = to_u64_slice_mut(self_long);
         let other_long = to_u64_slice_mut(other_long);
 
-        for (a, b) in self_long.iter_mut().zip(other_long.iter_mut()) {
-            u64::conditional_swap(a, b, choice);
-        }
         for (a, b) in self_short.iter_mut().zip(other_short.iter_mut()) {
             u8::conditional_swap(a, b, choice);
+        }
+        for (a, b) in self_long.iter_mut().zip(other_long.iter_mut()) {
+            u64::conditional_swap(a, b, choice);
         }
     }
 }
@@ -1137,7 +1242,7 @@ mod test {
         }
     }
 
-    
+
 
     #[test]
     fn slices_equal() {
