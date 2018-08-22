@@ -844,7 +844,7 @@ fn to_u64_slice(bytes: &[u8]) -> &[u64] {
     unsafe {
         core::slice::from_raw_parts(
             bytes.as_ptr() as *const u64,
-            bytes.len() / std::mem::size_of::<u64>(),
+            bytes.len() / core::mem::size_of::<u64>(),
         )
     }
 }
@@ -856,7 +856,7 @@ fn to_u64_slice_mut(bytes: &mut [u8]) -> &mut [u64] {
     unsafe {
         core::slice::from_raw_parts_mut(
             bytes.as_ptr() as *mut u64,
-            bytes.len() / std::mem::size_of::<u64>(),
+            bytes.len() / core::mem::size_of::<u64>(),
         )
     }
 
