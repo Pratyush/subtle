@@ -370,79 +370,79 @@ macro_rules! generate_integer_conditional_negate {
     )*)
 }
 
-#[cfg(all(feature = "nightly", target_arch = "x86_64"))]
-mod x86_64_cmov_impls {
-    use super::*;
+// #[cfg(all(feature = "nightly", target_arch = "x86_64"))]
+// mod x86_64_cmov_impls {
+//     use super::*;
 
-    impl ConditionallySelectable for u8 {
-        #[inline]
-        fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-            let a = *a as u16;
-            let b = *b as u16;
-            u16::conditional_select(&a, &b, choice) as u8
-        }
-    }
+//     impl ConditionallySelectable for u8 {
+//         #[inline]
+//         fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+//             let a = *a as u16;
+//             let b = *b as u16;
+//             u16::conditional_select(&a, &b, choice) as u8
+//         }
+//     }
 
-    impl ConditionallySelectable for i8 {
-        #[inline]
-        fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-            let a = *a as i16;
-            let b = *b as i16;
-            i16::conditional_select(&a, &b, choice) as Self
-        }
-    }
+//     impl ConditionallySelectable for i8 {
+//         #[inline]
+//         fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+//             let a = *a as i16;
+//             let b = *b as i16;
+//             i16::conditional_select(&a, &b, choice) as Self
+//         }
+//     }
 
-    macro_rules! generate_integer_conditional_select {
-        ($($t:tt)*) => ($(
-                impl ConditionallySelectable for $t {
-                    #[inline]
-                    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-                        let temp_a = *a;
-                        let temp_b = *b;
-                        // Forces compiler to not optimize the if into something weird
-                        unsafe {
-                            asm!("" :: "r"(temp_a) :: "volatile");
-                            asm!("" :: "r"(temp_b) :: "volatile");
-                        }
-                        // TODO: how to verify that this compiles to cmov?
-                        if choice.unwrap_u8() == 1 { temp_b } else { temp_a }
-                    }
-                }
-            )*
-        )
-    }
+//     macro_rules! generate_integer_conditional_select {
+//         ($($t:tt)*) => ($(
+//                 impl ConditionallySelectable for $t {
+//                     #[inline]
+//                     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+//                         let temp_a = *a;
+//                         let temp_b = *b;
+//                         // Forces compiler to not optimize the if into something weird
+//                         unsafe {
+//                             asm!("" :: "r"(temp_a) :: "volatile");
+//                             asm!("" :: "r"(temp_b) :: "volatile");
+//                         }
+//                         // TODO: how to verify that this compiles to cmov?
+//                         if choice.unwrap_u8() == 1 { temp_b } else { temp_a }
+//                     }
+//                 }
+//             )*
+//         )
+//     }
 
-    generate_integer_conditional_select!(u16 i16);
-    generate_integer_conditional_select!(u32 i32);
-    generate_integer_conditional_select!(u64 i64);
+//     generate_integer_conditional_select!(u16 i16);
+//     generate_integer_conditional_select!(u32 i32);
+//     generate_integer_conditional_select!(u64 i64);
 
-    macro_rules! generate_cmov_integer_conditional_select_assign_swap {
-        ($($t:tt)*) => ($(
-                impl ConditionallyAssignable for $t {
-                    #[inline]
-                    fn conditional_assign(&mut self, other: &Self, choice: Choice) {
-                        *self = Self::conditional_select(self as &Self, other, choice)
-                    }
-                }
+//     macro_rules! generate_cmov_integer_conditional_select_assign_swap {
+//         ($($t:tt)*) => ($(
+//                 impl ConditionallyAssignable for $t {
+//                     #[inline]
+//                     fn conditional_assign(&mut self, other: &Self, choice: Choice) {
+//                         *self = Self::conditional_select(self as &Self, other, choice)
+//                     }
+//                 }
 
-                impl ConditionallySwappable for $t {
-                    #[inline]
-                    fn conditional_swap(&mut self, other: &mut Self, choice: Choice) {
-                        let temp = *self;
-                        self.conditional_assign(other, choice);
-                        other.conditional_assign(&temp, choice);
-                    }
-                }
-         )*)
-    }
-    generate_cmov_integer_conditional_select_assign_swap!(  u8   i8);
-    generate_cmov_integer_conditional_select_assign_swap!( u16  i16);
-    generate_cmov_integer_conditional_select_assign_swap!( u32  i32);
-    generate_cmov_integer_conditional_select_assign_swap!( u64  i64);
+//                 impl ConditionallySwappable for $t {
+//                     #[inline]
+//                     fn conditional_swap(&mut self, other: &mut Self, choice: Choice) {
+//                         let temp = *self;
+//                         self.conditional_assign(other, choice);
+//                         other.conditional_assign(&temp, choice);
+//                     }
+//                 }
+//          )*)
+//     }
+//     generate_cmov_integer_conditional_select_assign_swap!(  u8   i8);
+//     generate_cmov_integer_conditional_select_assign_swap!( u16  i16);
+//     generate_cmov_integer_conditional_select_assign_swap!( u32  i32);
+//     generate_cmov_integer_conditional_select_assign_swap!( u64  i64);
 
-}
+// }
 
-#[cfg(not(all(feature = "nightly", target_arch = "x86_64")))]
+// #[cfg(not(all(feature = "nightly", target_arch = "x86_64")))]
 mod non_cmov_impls {
     use super::*;
 
@@ -932,6 +932,8 @@ impl ConditionallySwappable for [u8] {
         let (other_short, other_long) = other.split_at_mut(part_of_other_not_aligned_to_8);
         let self_long = to_u64_slice_mut(self_long);
         let other_long = to_u64_slice_mut(other_long);
+        debug_assert_eq!(self_long.len(), other_long.len());
+        debug_assert_eq!(self_short.len(), other_short.len());
 
         for (a, b) in self_short.iter_mut().zip(other_short.iter_mut()) {
             u8::conditional_swap(a, b, choice);
@@ -945,7 +947,7 @@ impl ConditionallySwappable for [u8] {
 #[cfg(feature = "nightly")]
 #[inline(always)]
 fn to_u64_slice(bytes: &[u8]) -> &[u64] {
-    assert_eq!(bytes.len() % 8, 0);
+    debug_assert_eq!(bytes.len() % 8, 0);
     unsafe {
         core::slice::from_raw_parts(
             bytes.as_ptr() as *const u64,
@@ -957,7 +959,7 @@ fn to_u64_slice(bytes: &[u8]) -> &[u64] {
 #[cfg(feature = "nightly")]
 #[inline(always)]
 fn to_u64_slice_mut(bytes: &mut [u8]) -> &mut [u64] {
-    assert_eq!(bytes.len() % 8, 0);
+    debug_assert_eq!(bytes.len() % 8, 0);
     unsafe {
         core::slice::from_raw_parts_mut(
             bytes.as_ptr() as *mut u64,

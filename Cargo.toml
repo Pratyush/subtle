@@ -24,3 +24,6 @@ default = ["std"]
 std = []
 bench = []
 nightly = []
+
+[dev-dependencies]
+rand = "0.4"
