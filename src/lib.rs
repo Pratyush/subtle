@@ -72,7 +72,7 @@ impl BitAnd for Choice {
     type Output = Choice;
     #[inline]
     fn bitand(self, rhs: Choice) -> Choice {
-        (self.0 & rhs.0).into()
+        Choice(self.0 & rhs.0)
     }
 }
 
@@ -80,7 +80,7 @@ impl BitOr for Choice {
     type Output = Choice;
     #[inline]
     fn bitor(self, rhs: Choice) -> Choice {
-        (self.0 | rhs.0).into()
+        Choice(self.0 | rhs.0)
     }
 }
 
@@ -88,7 +88,7 @@ impl BitXor for Choice {
     type Output = Choice;
     #[inline]
     fn bitxor(self, rhs: Choice) -> Choice {
-        (self.0 ^ rhs.0).into()
+        Choice(self.0 ^ rhs.0)
     }
 }
 
@@ -96,7 +96,7 @@ impl Not for Choice {
     type Output = Choice;
     #[inline]
     fn not(self) -> Choice {
-        (1u8 & (!self.0)).into()
+        Choice(1u8 & (!self.0))
     }
 }
 
