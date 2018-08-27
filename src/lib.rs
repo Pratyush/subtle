@@ -392,9 +392,22 @@ generate_integer_conditional_negate!( i64);
 generate_integer_conditional_negate!(i128);
 
 impl ConstantTimeEq for Choice {
+    /// Returns `Choice::TRUE` if  `a` and `b` are equal.
+    ///
+    /// ```
+    /// # use subtle::ConstantTimeEq;
+    /// # use subtle::Choice;
+    /// let a: Choice = 0.into();
+    ///
+    /// let c = a.ct_eq(&0.into());
+    /// let d = a.ct_eq(&1.into());
+    /// 
+    /// assert_eq!(c.unwrap_u8(), 1);
+    /// assert_eq!(d.unwrap_u8(), 0);
+    /// ```
     #[inline]
     fn ct_eq(&self, other: &Self) -> Choice {
-        self.0.ct_eq(&other.0)
+        !(*self ^ *other)
     }
 }
 
@@ -423,9 +436,22 @@ macro_rules! generate_generic_conditional_assign_swap {
 ///////////////////////////////////////
 
 impl ConstantTimeEq for bool {
+    /// Returns `Choice::TRUE` if  `a` and `b` are equal.
+    ///
+    /// ```
+    /// # use subtle::ConstantTimeEq;
+    /// # use subtle::Choice;
+    /// let a: bool = false;
+    ///
+    /// let c = a.ct_eq(&false);
+    /// let d = a.ct_eq(&true);
+    /// 
+    /// assert_eq!(c.unwrap_u8(), 1);
+    /// assert_eq!(d.unwrap_u8(), 0);
+    /// ```
     #[inline]
     fn ct_eq(&self, other: &Self) -> Choice {
-        (*self as u8).ct_eq(&(*other as u8))
+        Choice::from(!(*self ^ *other))
     }
 }
 
@@ -452,9 +478,23 @@ impl ConditionallySelectable for bool {
 generate_generic_conditional_assign_swap!(bool);
 
 impl ConditionallySelectable for Choice {
+    /// Returns `b` if  `choice` is `Choice::TRUE, and `a` otherwise.
+    ///
+    /// ```
+    /// # use subtle::ConditionallySelectable;
+    /// # use subtle::Choice;
+    /// let a: Choice = 0.into();
+    /// let b: Choice = 1.into();
+    ///
+    /// let c = Choice::conditional_select(&a, &b, 1.into());
+    /// let d = Choice::conditional_select(&a, &b, 0.into());
+    ///
+    /// assert_eq!(c.unwrap_u8(), 1);
+    /// assert_eq!(d.unwrap_u8(), 0);
+    /// ```
     #[inline]
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        u8::conditional_select(&a.0, &b.0, choice).into()
+        ((!choice) & *a) | (choice & *b)
     }
 }
 generate_generic_conditional_assign_swap!(Choice);
@@ -487,12 +527,12 @@ impl<T: ConstantTimeEq> ConstantTimeEq for  [T] {
     /// assert_eq!(a_eq_b.unwrap_u8(), 0);
     /// ```
     #[inline]
-    fn ct_eq(&self, _rhs: &[T]) -> Choice {
+    fn ct_eq(&self, rhs: &[T]) -> Choice {
         let len = self.len();
 
         // Short-circuit on the *lengths* of the slices, not their
         // contents.
-        if len != _rhs.len() {
+        if len != rhs.len() {
             return Choice::from(0);
         }
 
@@ -500,7 +540,7 @@ impl<T: ConstantTimeEq> ConstantTimeEq for  [T] {
         // shouldn't be able to reason about the value of the `u8`
         // unwrapped from the `ct_eq` result.
         let mut x = 1u8;
-        for (ai, bi) in self.iter().zip(_rhs.iter()) {
+        for (ai, bi) in self.iter().zip(rhs.iter()) {
             x &= ai.ct_eq(bi).unwrap_u8();
         }
 
