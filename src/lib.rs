@@ -407,7 +407,7 @@ impl ConstantTimeEq for Choice {
     /// ```
     #[inline]
     fn ct_eq(&self, other: &Self) -> Choice {
-        self.0.ct_eq(&other.0)
+        !(*self ^ *other)
     }
 }
 
@@ -494,7 +494,7 @@ impl ConditionallySelectable for Choice {
     /// ```
     #[inline]
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        u8::conditional_select(&a.0, &b.0, choice).into()
+        ((!choice) & *a) | (choice & *b)
     }
 }
 generate_generic_conditional_assign_swap!(Choice);
