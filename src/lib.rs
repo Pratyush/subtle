@@ -838,6 +838,86 @@ generate_tuple_impls! {
     (0 T0 1 T1 2 T2 3 T3 4 T4 5 T5 6 T6 7 T7 8 T8 9 T9 10 T10 11 T11)
 }
 
+macro_rules! generate_array_impls {
+    ($n:expr) => {
+        impl<T> ConstantTimeEq for [T; $n]
+        where
+            T: ConstantTimeEq,
+        {
+            #[inline]
+            fn ct_eq(&self, other: &Self) -> Choice {
+                self.as_ref().ct_eq(other.as_ref())
+            }
+        }
+
+
+        impl<T> ConditionallySelectable for [T; $n]
+        where
+            T: ConditionallySelectable + Default,
+        {
+            #[inline]
+            fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+                let mut result = <[T; $n]>::default();
+                for (i, (a_i, b_i)) in a.iter().zip(b.iter()).enumerate() {
+                    result[i] = T::conditional_select(a_i, b_i, choice);
+                }
+                result
+            }
+        }
+
+        impl<T> ConditionallyAssignable for [T; $n]
+        where
+            T: ConditionallyAssignable,
+        {
+            #[inline]
+            fn conditional_assign(&mut self, b: &Self, choice: Choice) {
+                self.as_mut().conditional_assign(b.as_ref(), choice);
+            }
+        }
+        
+        impl<T> ConditionallySwappable for [T; $n]
+        where
+            T: ConditionallySwappable,
+        {
+            #[inline]
+            fn conditional_swap(&mut self, b: &mut Self, choice: Choice) {
+                self.as_mut().conditional_swap(b.as_mut(), choice);
+            }
+        }
+    }
+}
+generate_array_impls!(1);
+generate_array_impls!(2);
+generate_array_impls!(3);
+generate_array_impls!(4);
+generate_array_impls!(5);
+generate_array_impls!(6);
+generate_array_impls!(7);
+generate_array_impls!(8);
+generate_array_impls!(9);
+generate_array_impls!(10);
+generate_array_impls!(11);
+generate_array_impls!(12);
+generate_array_impls!(13);
+generate_array_impls!(14);
+generate_array_impls!(15);
+generate_array_impls!(16);
+generate_array_impls!(18);
+generate_array_impls!(19);
+generate_array_impls!(20);
+generate_array_impls!(21);
+generate_array_impls!(22);
+generate_array_impls!(23);
+generate_array_impls!(24);
+generate_array_impls!(25);
+generate_array_impls!(26);
+generate_array_impls!(27);
+generate_array_impls!(28);
+generate_array_impls!(29);
+generate_array_impls!(30);
+generate_array_impls!(31);
+generate_array_impls!(32);
+
 #[cfg(test)]
 mod test {
     use super::*;
