@@ -112,13 +112,12 @@ fn black_box(input: u8) -> u8 {
     // Pretend to access a register containing the input.  We "volatile" here
     // because some optimisers treat assembly templates without output operands
     // as "volatile" while others do not.
-    unsafe { asm!("" :: "r"(&input) :: "volatile") }
+    // unsafe { asm!("" :: "r"(&input) :: "volatile") }
 
     input
 }
 
 #[cfg(any(target_arch = "asmjs", target_arch = "wasm32", not(feature = "nightly")))]
-#[inline(never)]
 fn black_box(input: u8) -> u8 {
     debug_assert!(input == 0u8 || input == 1u8);
     // We don't have access to inline assembly or test::black_box or ...
