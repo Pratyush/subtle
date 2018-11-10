@@ -464,14 +464,7 @@ impl ConditionallySelectable for bool {
 
         let mask = -(choice.unwrap_u8() as i8) as u8;
         let result = a ^ ((mask) & (a ^ b));
-        let output;
-        #[cfg(feature="nightly")]
-        unsafe {
-            asm!("" : "=r"(output) : "0"(result));
-        }
-        #[cfg(not(feature="nightly"))]
-        unsafe { output = core::mem::transmute(result); }
-        output
+        unsafe { core::mem::transmute(result) }
     }
 }
 generate_generic_conditional_assign_swap!(bool);
@@ -501,7 +494,6 @@ generate_generic_conditional_assign_swap!(Choice);
 ///////////////////////////////////////
 ///////////////////////////////////////
 
-#[cfg(not(feature = "nightly"))]
 impl<T: ConstantTimeEq> ConstantTimeEq for  [T] {
     /// Check whether two slices of `ConstantTimeEq` types are equal.
     ///
@@ -623,121 +615,6 @@ impl<T: ConditionallySwappable> ConditionallySwappable for [T] {
     }
 }
 
-#[cfg(feature = "nightly")]
-impl<T: ConstantTimeEq> ConstantTimeEq for  [T] {
-    /// Check whether two slices of `ConstantTimeEq` types are equal.
-    ///
-    /// # Note
-    ///
-    /// This function short-circuits if the lengths of the input slices
-    /// are different.  Otherwise, it should execute in time independent
-    /// of the slice contents.
-    ///
-    /// Since arrays coerce to slices, this function works with fixed-size arrays:
-    ///
-    /// ```
-    /// # use subtle::ConstantTimeEq;
-    /// #
-    /// let a: [u8; 8] = [0,1,2,3,4,5,6,7];
-    /// let b: [u8; 8] = [0,1,2,3,0,1,2,3];
-    ///
-    /// let a_eq_a = a.ct_eq(&a);
-    /// let a_eq_b = a.ct_eq(&b);
-    ///
-    /// assert_eq!(a_eq_a.unwrap_u8(), 1);
-    /// assert_eq!(a_eq_b.unwrap_u8(), 0);
-    /// ```
-    #[inline]
-    default fn ct_eq(&self, rhs: &[T]) -> Choice {
-        let len = self.len();
-
-        // Short-circuit on the *lengths* of the slices, not their
-        // contents.
-        if len != rhs.len() {
-            return Choice::from(0);
-        }
-
-        // This loop shouldn't be shortcircuitable, since the compiler
-        // shouldn't be able to reason about the value of the `u8`
-        // unwrapped from the `ct_eq` result.
-        let mut x = 1u8;
-        for (ai, bi) in self.iter().zip(rhs.iter()) {
-            x &= ai.ct_eq(bi).unwrap_u8();
-        }
-
-        x.into()
-    }
-}
-
-#[cfg(feature = "nightly")]
-impl ConstantTimeEq for  [u8] {
-    /// Check whether two slices of `ConstantTimeEq` types are equal.
-    ///
-    /// # Note
-    ///
-    /// This function short-circuits if the lengths of the input slices
-    /// are different.  Otherwise, it should execute in time independent
-    /// of the slice contents.
-    ///
-    /// Since arrays coerce to slices, this function works with fixed-size arrays:
-    ///
-    /// ```
-    /// # use subtle::ConstantTimeEq;
-    /// #
-    /// let a: [u8; 8] = [0,1,2,3,4,5,6,7];
-    /// let b: [u8; 8] = [0,1,2,3,0,1,2,3];
-    ///
-    /// let a_eq_a = a.ct_eq(&a);
-    /// let a_eq_b = a.ct_eq(&b);
-    ///
-    /// assert_eq!(a_eq_a.unwrap_u8(), 1);
-    /// assert_eq!(a_eq_b.unwrap_u8(), 0);
-    /// ```
-    #[inline]
-    fn ct_eq(&self, rhs: &[u8]) -> Choice {
-        let len = self.len();
-
-        // Short-circuit on the *lengths* of the slices, not their
-        // contents.
-        if len != rhs.len() {
-            return Choice::from(0);
-        }
-
-        // This loop shouldn't be shortcircuitable, since the compiler
-        // shouldn't be able to reason about the value of the `u8`
-        // unwrapped from the `ct_eq` result.
-        let mut x = 1u8;
-
-        let part_of_self_not_aligned_to_16 = self.len() % 16;
-        let (self_short, self_long) = self.split_at(part_of_self_not_aligned_to_16);
-        let (other_short, other_long) = rhs.split_at(part_of_self_not_aligned_to_16);
-
-        let self_long = to_u128_slice(self_long);
-        let other_long = to_u128_slice(other_long);
-
-        for i in 0..self_long.len() {
-            x &= self_long[i].ct_eq(&other_long[i]).unwrap_u8();
-        }
-
-        for i in 0..self_short.len() {
-            x &= self_short[i].ct_eq(&other_short[i]).unwrap_u8();
-        }
-
-        x.into()
-    }
-}
-
-#[cfg(feature = "nightly")]
-#[inline(always)]
-fn to_u128_slice(bytes: &[u8]) -> &[u128] {
-    debug_assert_eq!(bytes.len() % 16, 0);
-    unsafe {
-        core::slice::from_raw_parts(
-            bytes.as_ptr() as *const u128,
-            bytes.len() / core::mem::size_of::<u128>(),
-        )
-    }
-}
 
 ///////////////////////////////////////
 ///////////////////////////////////////
@@ -927,7 +804,7 @@ mod test {
         let a: [u8; 3] = [0, 0, 0];
         let b: [u8; 4] = [0, 0, 0, 0];
 
-        assert_eq!((&a).ct_eq(&b).unwrap_u8(), 1);
+        assert_eq!((a.as_ref()).ct_eq(b.as_ref()).unwrap_u8(), 1);
     }
 
     #[test]
@@ -1107,7 +984,7 @@ mod test {
         assert_eq!(a_eq_a.unwrap_u8(), 1);
         assert_eq!(a_eq_b.unwrap_u8(), 0);
 
-        let c: [u8; 16] = [0u8; 16];
+        let c = [0u8; 8];
 
         let a_eq_c = (&a).ct_eq(&c);
         assert_eq!(a_eq_c.unwrap_u8(), 0);
